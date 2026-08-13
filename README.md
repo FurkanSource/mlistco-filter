@@ -1,6 +1,6 @@
 # MListCo Vehicle Filter
 
-A Tampermonkey userscript that adds make/model search, year, price, mileage, and sold-status filtering to MListCo vehicle listings. It also restores listing position and filters after opening a vehicle, captures mileage from page data, and can load additional inventory before filtering.
+A Tampermonkey userscript that adds make/model search, year, price, mileage, and sold-status filtering to MListCo vehicle listings. It also restores listing position and filters after opening a vehicle, captures mileage from page data, and can optionally load inventory to a custom target count.
 
 ## Install
 

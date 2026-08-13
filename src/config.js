@@ -15,7 +15,6 @@ export const DEFAULT_STATE = {
 };
 
 export const CARD_SELECTOR = '.bubble-element.group-item';
-export const MIN_FILTER_CARS = 100;
 export const AUTO_LOAD_TARGET = 200;
 export const MAX_BODY_BYTES = 5000000;
 export const MAX_INFLIGHT_READS = 4;

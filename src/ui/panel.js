@@ -1,6 +1,6 @@
 import panelCss from './panel.css';
 import panelHtml from './panel.html';
-import { AUTO_LOAD_TARGET, MIN_FILTER_CARS } from '../config.js';
+import { AUTO_LOAD_TARGET } from '../config.js';
 import { num } from '../core/utils.js';
 import { getCards } from '../listings/cards.js';
 import { setStatus, updatePanelMeta } from './status.js';
@@ -32,11 +32,16 @@ export function createPanel({ filterStore, filterController, autoLoader }) {
     readForm();
     filterStore.save();
     updatePanelMeta(getCards().length);
-    if (filterStore.getActiveFilterCount() && getCards().length < MIN_FILTER_CARS) {
-      setStatus(`Loading ${MIN_FILTER_CARS} listings first…`, 'loading');
-      await autoLoader.autoLoadCards(MIN_FILTER_CARS, true, true);
-    }
     filterController.applyFilter();
+  }
+
+  function getLoadTarget() {
+    const requested = num(document.getElementById('mlf-load-count').value);
+    return Math.max(1, Math.min(requested ?? AUTO_LOAD_TARGET, 9999));
+  }
+
+  function loadInventory() {
+    return autoLoader.autoLoadCards(getLoadTarget(), true, true);
   }
 
   function hydrateForm() {
@@ -78,7 +83,7 @@ export function createPanel({ filterStore, filterController, autoLoader }) {
 
     hydrateForm();
     updatePanelMeta(getCards().length);
-    setStatus('Load listings, then filter', 'neutral');
+    setStatus('Ready to filter', 'neutral');
 
     document.getElementById('mlf-apply').addEventListener('click', applyFromForm);
     document.getElementById('mlf-reset').addEventListener('click', () => {
@@ -90,16 +95,18 @@ export function createPanel({ filterStore, filterController, autoLoader }) {
       setStatus('Filters cleared', 'neutral');
     });
 
-    document.getElementById('mlf-load').addEventListener('click', () => {
-      autoLoader.autoLoadCards(Math.max(AUTO_LOAD_TARGET, MIN_FILTER_CARS), true, true);
+    document.getElementById('mlf-load').addEventListener('click', loadInventory);
+
+    document.getElementById('mlf-load-count').addEventListener('keydown', async (event) => {
+      if (event.key === 'Enter') await loadInventory();
     });
 
-    panel.querySelectorAll('input').forEach((input) => {
+    panel.querySelectorAll('input:not(#mlf-load-count)').forEach((input) => {
       input.addEventListener('keydown', async (event) => {
         if (event.key === 'Enter') await applyFromForm();
       });
     });
   }
 
-  return { applyFromForm, buildPanel, readForm };
+  return { applyFromForm, buildPanel, getLoadTarget, loadInventory, readForm };
 }

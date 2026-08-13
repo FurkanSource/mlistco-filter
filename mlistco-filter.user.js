@@ -26,7 +26,6 @@
     hideSold: false
   };
   var CARD_SELECTOR = ".bubble-element.group-item";
-  var MIN_FILTER_CARS = 100;
   var AUTO_LOAD_TARGET = 200;
   var MAX_BODY_BYTES = 5e6;
   var MAX_INFLIGHT_READS = 4;
@@ -553,27 +552,13 @@
   function showAllCards(cards) {
     for (const card of cards) card.style.display = "";
   }
-  function getFilterGateState(active, {
-    cards = null,
-    root = globalThis.document,
-    selector = CARD_SELECTOR,
-    minFilterCars = MIN_FILTER_CARS
-  } = {}) {
-    const resolvedCards = cards || getCards(root, selector);
-    return {
-      cards: resolvedCards,
-      count: resolvedCards.length,
-      active,
-      ready: resolvedCards.length >= minFilterCars
-    };
-  }
 
   // src/ui/status.js
   function setStatus(message, tone = "neutral") {
     const status = document.getElementById("mlf-status");
     if (!status) return;
     status.dataset.tone = tone;
-    status.textContent = message || "Load listings, then filter";
+    status.textContent = message || "Ready to filter";
   }
   function renderOdometer(value) {
     const odometer = document.getElementById("mlf-odo");
@@ -602,29 +587,23 @@
       updatePanelMeta(getCards().length);
     }
     function applyFilter() {
-      const gate = getFilterGateState(filterStore2.hasAnyFilter());
-      lastCards = gate.cards;
-      if (!gate.count && isListingsPath(location.pathname)) {
+      const cards = getCards();
+      lastCards = cards;
+      if (!cards.length && isListingsPath(location.pathname)) {
         log("card selector matched nothing", CARD_SELECTOR);
         setStatus("No listings found — the page markup may have changed", "warning");
         refreshPanelMeta();
         return;
       }
-      if (gate.active && !gate.ready) {
-        showAllCards(gate.cards);
-        setStatus(`Load ${MIN_FILTER_CARS} listings before filtering — ${gate.count} so far`, "loading");
-        refreshPanelMeta();
-        return;
-      }
-      showAllCards(gate.cards);
-      const parsedCards = gate.cards.map((card, index) => cardParser2.parseCardCached(card, index));
+      showAllCards(cards);
+      const parsedCards = cards.map((card, index) => cardParser2.parseCardCached(card, index));
       let shown = 0;
-      for (let index = 0; index < gate.cards.length; index++) {
+      for (let index = 0; index < cards.length; index++) {
         const visible = matches(parsedCards[index], filterStore2.state);
-        gate.cards[index].style.display = visible ? "" : "none";
+        cards[index].style.display = visible ? "" : "none";
         if (visible) shown++;
       }
-      setStatus(`${shown} of ${gate.cards.length} shown`, shown === gate.cards.length ? "neutral" : "success");
+      setStatus(`${shown} of ${cards.length} shown`, shown === cards.length ? "neutral" : "success");
       refreshPanelMeta();
     }
     function applyFilterIfActive() {
@@ -1454,6 +1433,22 @@
 
 #mlf-panel button.mlf-btn.primary:hover { filter: brightness(1.07); }
 
+#mlf-panel .mlf-load-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  color: var(--mlf-dim);
+  font-size: 12px;
+}
+
+#mlf-panel .mlf-load-target input.mlf-num {
+  width: 68px;
+  flex: none;
+  padding-block: 6px;
+  text-align: center;
+}
+
 #mlf-panel button.mlf-btn.ghost {
   width: 100%;
   margin-top: 6px;
@@ -1512,11 +1507,10 @@
 }
 
 #mlf-panel ::selection { background: var(--mlf-amber); color: #12151a; }
-
 `;
 
   // src/ui/panel.html
-  var panel_default2 = '<div class="mlf-head">\n  <div>\n    <div class="mlf-odo" id="mlf-odo"></div>\n    <div class="mlf-cap">Listings loaded</div>\n  </div>\n  <button id="mlf-title" class="mlf-toggle" type="button" aria-expanded="true" aria-controls="mlf-body" aria-label="Collapse filters"><span id="mlf-toggle">&minus;</span></button>\n</div>\n<div class="mlf-body" id="mlf-body">\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-q">Search</label>\n    <input id="mlf-q" type="text" placeholder="m3 xdrive" />\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-ymin">Year</label>\n    <div class="mlf-pair">\n      <input id="mlf-ymin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum year" />\n      <input id="mlf-ymax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum year" />\n    </div>\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-pmin">Price</label>\n    <div class="mlf-pair">\n      <input id="mlf-pmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum price" />\n      <input id="mlf-pmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum price" />\n    </div>\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-mmin">Miles</label>\n    <div class="mlf-pair">\n      <input id="mlf-mmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum miles" />\n      <input id="mlf-mmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum miles" />\n    </div>\n  </div>\n  <label class="mlf-check" for="mlf-sold">\n    <input id="mlf-sold" type="checkbox" />\n    Hide sold listings\n  </label>\n  <div class="mlf-actions">\n    <button id="mlf-apply" class="mlf-btn primary" type="button">Apply</button>\n    <button id="mlf-reset" class="mlf-btn" type="button">Reset</button>\n  </div>\n  <button id="mlf-load" class="mlf-btn ghost" type="button">Load inventory</button>\n  <div id="mlf-status" data-tone="neutral"></div>\n</div>\n\n';
+  var panel_default2 = '<div class="mlf-head">\n  <div>\n    <div class="mlf-odo" id="mlf-odo"></div>\n    <div class="mlf-cap">Listings loaded</div>\n  </div>\n  <button id="mlf-title" class="mlf-toggle" type="button" aria-expanded="true" aria-controls="mlf-body" aria-label="Collapse filters"><span id="mlf-toggle">&minus;</span></button>\n</div>\n<div class="mlf-body" id="mlf-body">\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-q">Search</label>\n    <input id="mlf-q" type="text" placeholder="m3 xdrive" />\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-ymin">Year</label>\n    <div class="mlf-pair">\n      <input id="mlf-ymin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum year" />\n      <input id="mlf-ymax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum year" />\n    </div>\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-pmin">Price</label>\n    <div class="mlf-pair">\n      <input id="mlf-pmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum price" />\n      <input id="mlf-pmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum price" />\n    </div>\n  </div>\n  <div class="mlf-field">\n    <label class="mlf-label" for="mlf-mmin">Miles</label>\n    <div class="mlf-pair">\n      <input id="mlf-mmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum miles" />\n      <input id="mlf-mmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum miles" />\n    </div>\n  </div>\n  <label class="mlf-check" for="mlf-sold">\n    <input id="mlf-sold" type="checkbox" />\n    Hide sold listings\n  </label>\n  <div class="mlf-actions">\n    <button id="mlf-apply" class="mlf-btn primary" type="button">Apply</button>\n    <button id="mlf-reset" class="mlf-btn" type="button">Reset</button>\n  </div>\n  <label class="mlf-load-target" for="mlf-load-count">\n    <span>Load</span>\n    <input id="mlf-load-count" class="mlf-num" type="text" inputmode="numeric" maxlength="4" placeholder="200" aria-label="Number of cars to load" />\n    <span>cars</span>\n  </label>\n  <button id="mlf-load" class="mlf-btn ghost" type="button">Load inventory</button>\n  <div id="mlf-status" data-tone="neutral"></div>\n</div>\n';
 
   // src/ui/panel.js
   var INPUT_IDS = [
@@ -1544,11 +1538,14 @@
       readForm();
       filterStore2.save();
       updatePanelMeta(getCards().length);
-      if (filterStore2.getActiveFilterCount() && getCards().length < MIN_FILTER_CARS) {
-        setStatus(`Loading ${MIN_FILTER_CARS} listings first…`, "loading");
-        await autoLoader2.autoLoadCards(MIN_FILTER_CARS, true, true);
-      }
       filterController2.applyFilter();
+    }
+    function getLoadTarget() {
+      const requested = num(document.getElementById("mlf-load-count").value);
+      return Math.max(1, Math.min(requested ?? AUTO_LOAD_TARGET, 9999));
+    }
+    function loadInventory() {
+      return autoLoader2.autoLoadCards(getLoadTarget(), true, true);
     }
     function hydrateForm() {
       const { state } = filterStore2;
@@ -1583,7 +1580,7 @@
       document.getElementById("mlf-sold").addEventListener("change", applyFromForm);
       hydrateForm();
       updatePanelMeta(getCards().length);
-      setStatus("Load listings, then filter", "neutral");
+      setStatus("Ready to filter", "neutral");
       document.getElementById("mlf-apply").addEventListener("click", applyFromForm);
       document.getElementById("mlf-reset").addEventListener("click", () => {
         for (const id of INPUT_IDS) document.getElementById(id).value = "";
@@ -1593,16 +1590,17 @@
         updatePanelMeta(getCards().length);
         setStatus("Filters cleared", "neutral");
       });
-      document.getElementById("mlf-load").addEventListener("click", () => {
-        autoLoader2.autoLoadCards(Math.max(AUTO_LOAD_TARGET, MIN_FILTER_CARS), true, true);
+      document.getElementById("mlf-load").addEventListener("click", loadInventory);
+      document.getElementById("mlf-load-count").addEventListener("keydown", async (event) => {
+        if (event.key === "Enter") await loadInventory();
       });
-      panel2.querySelectorAll("input").forEach((input) => {
+      panel2.querySelectorAll("input:not(#mlf-load-count)").forEach((input) => {
         input.addEventListener("keydown", async (event) => {
           if (event.key === "Enter") await applyFromForm();
         });
       });
     }
-    return { applyFromForm, buildPanel, readForm };
+    return { applyFromForm, buildPanel, getLoadTarget, loadInventory, readForm };
   }
 
   // src/main.js

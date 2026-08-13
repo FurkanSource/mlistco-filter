@@ -2,7 +2,7 @@ export function setStatus(message, tone = 'neutral') {
   const status = document.getElementById('mlf-status');
   if (!status) return;
   status.dataset.tone = tone;
-  status.textContent = message || 'Load listings, then filter';
+  status.textContent = message || 'Ready to filter';
 }
 
 export function renderOdometer(value) {
@@ -25,4 +25,3 @@ export function renderOdometer(value) {
 export function updatePanelMeta(cardCount) {
   renderOdometer(cardCount);
 }
-
