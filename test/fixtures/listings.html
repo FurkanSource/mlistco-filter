@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MListCo Filter - Browser Fixture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f3f5f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: #f3f5f7;
+    }
+
+    button,
+    input { font: inherit; }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      min-height: 64px;
+      padding: 0 32px;
+      background: #ffffff;
+      border-bottom: 1px solid #dce1e7;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: #111827;
+      font-size: 18px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      color: #ffffff;
+      background: #d23b3b;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .site-nav {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      color: #5b6473;
+      font-size: 14px;
+    }
+
+    .site-nav strong { color: #172033; }
+
+    .fixture-label {
+      margin-left: auto;
+      padding: 5px 8px;
+      color: #52606f;
+      background: #edf1f4;
+      border: 1px solid #dce1e7;
+      border-radius: 4px;
+      font: 600 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    .page-shell {
+      width: min(1180px, calc(100% - 340px));
+      margin: 0 auto 72px;
+      padding: 32px 0;
+    }
+
+    .page-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .page-heading h1 {
+      margin: 0;
+      color: #111827;
+      font-size: 27px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .page-heading p {
+      margin: 7px 0 0;
+      color: #687385;
+      font-size: 14px;
+    }
+
+    .inventory-total {
+      flex: none;
+      color: #326a51;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px;
+      background: #ffffff;
+      border: 1px solid #dce1e7;
+      border-radius: 8px;
+    }
+
+    .toolbar input {
+      min-width: 0;
+      height: 38px;
+      padding: 0 12px;
+      color: #172033;
+      background: #ffffff;
+      border: 1px solid #bcc5d0;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .toolbar input:focus {
+      border-color: #2672d9;
+      box-shadow: 0 0 0 3px rgba(38, 114, 217, 0.14);
+    }
+
+    .sort-label {
+      display: flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 11px;
+      color: #5f6978;
+      background: #f7f8fa;
+      border: 1px solid #dce1e7;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .listing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .bubble-element.group-item {
+      min-width: 0;
+      overflow: hidden;
+      background: #ffffff;
+      border: 1px solid #dce1e7;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(22, 32, 51, 0.05);
+    }
+
+    .vehicle-preview {
+      position: relative;
+      display: grid;
+      aspect-ratio: 16 / 9;
+      place-items: center;
+      color: #ffffff;
+      background: var(--vehicle-color, #43556d);
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .vehicle-preview::before,
+    .vehicle-preview::after {
+      content: "";
+      position: absolute;
+      bottom: 23%;
+      width: 14px;
+      height: 14px;
+      background: #111827;
+      border: 3px solid #c9d1da;
+      border-radius: 50%;
+    }
+
+    .vehicle-preview::before { left: 27%; }
+    .vehicle-preview::after { right: 27%; }
+
+    .listing-state {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 4px 7px;
+      color: #1e5a42;
+      background: #e1f4ea;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .listing-state.sold {
+      color: #812f2f;
+      background: #f9e3e3;
+    }
+
+    .listing-content { padding: 13px; }
+
+    .listing-title {
+      min-height: 40px;
+      margin: 0;
+      overflow-wrap: anywhere;
+      color: #172033;
+      font-size: 15px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .listing-price {
+      margin: 10px 0 8px;
+      color: #111827;
+      font-size: 19px;
+      font-weight: 750;
+    }
+
+    .listing-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: #667181;
+      font-size: 12px;
+    }
+
+    .listing-location {
+      margin-top: 11px;
+      padding-top: 10px;
+      color: #7a8492;
+      border-top: 1px solid #edf0f3;
+      font-size: 11px;
+    }
+
+    @media (max-width: 1120px) {
+      .page-shell {
+        width: calc(100% - 324px);
+        margin-left: 20px;
+      }
+
+      .listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      .site-header { padding: 0 16px; }
+      .site-nav { display: none; }
+      .page-shell {
+        width: auto;
+        margin: 0 16px 60px;
+        padding-top: 24px;
+      }
+      .page-heading { align-items: start; }
+      .toolbar { grid-template-columns: 1fr; }
+      .listing-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand"><span class="brand-mark">ML</span> MListCo Motors</div>
+    <nav class="site-nav" aria-label="Primary">
+      <strong>Inventory</strong>
+      <span>Sell a car</span>
+      <span>Financing</span>
+    </nav>
+    <span class="fixture-label">Local fixture</span>
+  </header>
+
+  <main class="page-shell">
+    <div class="page-heading">
+      <div>
+        <h1>Available vehicles</h1>
+        <p>Certified dealer listings across the New York metro area</p>
+      </div>
+      <div class="inventory-total"><span id="fixture-count">0</span> vehicles</div>
+    </div>
+
+    <div class="toolbar">
+      <input type="search" aria-label="Marketplace search preview" placeholder="Search make, model, or trim" />
+      <div class="sort-label">Sorted by recently added</div>
+    </div>
+
+    <section id="listing-grid" class="listing-grid" aria-label="Vehicle listings"></section>
+  </main>
+
+  <script>
+    (() => {
+      const vehicles = [
+        ['BMW', 'M3 Competition xDrive'],
+        ['Audi', 'RS 5 Sportback'],
+        ['Mercedes-Benz', 'C 43 AMG'],
+        ['Porsche', 'Macan S'],
+        ['Lexus', 'IS 350 F Sport'],
+        ['Ford', 'Mustang GT Premium'],
+        ['Toyota', 'GR Supra 3.0'],
+        ['Honda', 'Civic Type R'],
+        ['Volvo', 'S60 Recharge'],
+        ['Cadillac', 'CT5-V'],
+        ['Genesis', 'G70 3.3T'],
+        ['Volkswagen', 'Golf R']
+      ];
+      const locations = ['Staten Island, NY', 'Brooklyn, NY', 'Queens, NY', 'New York, NY'];
+      const colors = ['#3d536d', '#734950', '#35665e', '#61547a', '#6c5b3e', '#44515e'];
+      const grid = document.getElementById('listing-grid');
+      const cardCount = 108;
+
+      for (let index = 0; index < cardCount; index += 1) {
+        const [make, model] = vehicles[index % vehicles.length];
+        const year = 2018 + (index % 8);
+        const price = 26900 + ((index * 1700) % 62000);
+        const miles = 4200 + ((index * 3713) % 94000);
+        const sold = index % 13 === 0;
+        const card = document.createElement('article');
+        card.className = 'bubble-element group-item';
+        card.innerHTML = `
+          <div class="vehicle-preview" style="--vehicle-color: ${colors[index % colors.length]}">
+            <span>${make.slice(0, 3).toUpperCase()}</span>
+            <span class="listing-state${sold ? ' sold' : ''}">${sold ? 'Sold' : 'Available'}</span>
+          </div>
+          <div class="listing-content">
+            <h2 class="listing-title">${year} ${make} ${model}</h2>
+            <div class="listing-price">$${price.toLocaleString('en-US')}</div>
+            <div class="listing-meta">
+              <span>${miles.toLocaleString('en-US')} miles</span>
+              <span>Automatic</span>
+            </div>
+            <div class="listing-location">${locations[index % locations.length]}</div>
+          </div>`;
+        grid.appendChild(card);
+      }
+
+      document.getElementById('fixture-count').textContent = String(cardCount);
+    })();
+  </script>
+  <script src="../../mlistco-filter.user.js"></script>
+</body>
+</html>

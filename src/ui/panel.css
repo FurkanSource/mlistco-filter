@@ -1,0 +1,267 @@
+#mlf-panel {
+  --mlf-base: #12151a;
+  --mlf-raise: #1b1f26;
+  --mlf-rule: #2c333d;
+  --mlf-text: #e6eaf0;
+  --mlf-dim: #8a94a2;
+  --mlf-amber: #ffb020;
+  --mlf-good: #46c79b;
+  --mlf-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mlf-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 268px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  background: var(--mlf-base);
+  color: var(--mlf-text);
+  font-family: var(--mlf-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  border: 1px solid var(--mlf-rule);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3);
+}
+
+#mlf-panel * { box-sizing: border-box; }
+#mlf-panel.collapsed .mlf-body { display: none; }
+#mlf-panel.collapsed .mlf-head { border-bottom: 0; }
+
+#mlf-panel .mlf-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--mlf-rule);
+}
+
+#mlf-panel .mlf-odo { display: flex; gap: 2px; }
+
+#mlf-panel .mlf-digit {
+  position: relative;
+  width: 15px;
+  height: 22px;
+  overflow: hidden;
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #05070a 0%, #1d232c 46%, #10141a 55%, #05070a 100%);
+}
+
+#mlf-panel .mlf-digit i {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 13px/1 var(--mlf-mono);
+  font-style: normal;
+  color: var(--mlf-amber);
+}
+
+#mlf-panel .mlf-digit.roll i {
+  animation: mlf-roll 240ms cubic-bezier(.2,.8,.25,1);
+}
+
+@keyframes mlf-roll {
+  from { transform: translateY(-105%); opacity: .15; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+#mlf-panel .mlf-cap {
+  margin-top: 5px;
+  font: 600 9px/1 var(--mlf-sans);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--mlf-dim);
+}
+
+#mlf-panel .mlf-toggle {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--mlf-dim);
+  border: 1px solid var(--mlf-rule);
+  border-radius: 6px;
+  cursor: pointer;
+  font: 600 15px/1 var(--mlf-sans);
+}
+
+#mlf-panel .mlf-toggle:hover { color: var(--mlf-text); border-color: var(--mlf-dim); }
+#mlf-panel .mlf-body { padding: 12px; }
+#mlf-panel .mlf-field + .mlf-field { margin-top: 10px; }
+
+#mlf-panel .mlf-label {
+  display: block;
+  margin: 0 0 5px;
+  font: 600 9.5px/1 var(--mlf-sans);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--mlf-dim);
+}
+
+#mlf-panel input[type="text"] {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 7px 9px;
+  background: var(--mlf-raise);
+  color: var(--mlf-text);
+  border: 1px solid var(--mlf-rule);
+  border-radius: 6px;
+  font: 400 13px/1.2 var(--mlf-sans);
+  outline: none;
+}
+
+#mlf-panel input.mlf-num {
+  font-family: var(--mlf-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+#mlf-panel input[type="text"]:focus {
+  border-color: var(--mlf-amber);
+  box-shadow: 0 0 0 3px rgba(255,176,32,.14);
+}
+
+#mlf-panel input::placeholder { color: #5d6672; }
+#mlf-panel .mlf-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+#mlf-panel .mlf-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 13px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--mlf-text);
+}
+
+#mlf-panel .mlf-check input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  background: var(--mlf-raise);
+  border: 1px solid var(--mlf-rule);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  flex: none;
+}
+
+#mlf-panel .mlf-check input:checked {
+  background: var(--mlf-amber);
+  border-color: var(--mlf-amber);
+}
+
+#mlf-panel .mlf-check input:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #12151a;
+  border-width: 0 2px 2px 0;
+  transform: rotate(43deg);
+}
+
+#mlf-panel .mlf-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+#mlf-panel button.mlf-btn {
+  padding: 8px 13px;
+  font: 600 12.5px/1 var(--mlf-sans);
+  border-radius: 6px;
+  border: 1px solid var(--mlf-rule);
+  background: var(--mlf-raise);
+  color: var(--mlf-text);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+#mlf-panel button.mlf-btn:hover { border-color: var(--mlf-dim); }
+
+#mlf-panel button.mlf-btn.primary {
+  background: var(--mlf-amber);
+  border-color: var(--mlf-amber);
+  color: #1a1200;
+}
+
+#mlf-panel button.mlf-btn.primary:hover { filter: brightness(1.07); }
+
+#mlf-panel button.mlf-btn.ghost {
+  width: 100%;
+  margin-top: 6px;
+  background: transparent;
+  color: var(--mlf-dim);
+}
+
+#mlf-panel button.mlf-btn.ghost:hover { color: var(--mlf-text); border-color: var(--mlf-dim); }
+
+#mlf-panel button:focus-visible,
+#mlf-panel input:focus-visible {
+  outline: 2px solid var(--mlf-amber);
+  outline-offset: 2px;
+}
+
+#mlf-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mlf-rule);
+  font: 400 12px/1.4 var(--mlf-sans);
+  color: var(--mlf-dim);
+  min-height: 20px;
+}
+
+#mlf-status::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--mlf-dim);
+}
+
+#mlf-status[data-tone="success"] { color: var(--mlf-text); }
+#mlf-status[data-tone="success"]::before { background: var(--mlf-good); }
+#mlf-status[data-tone="warning"] { color: #ffc4a0; }
+#mlf-status[data-tone="warning"]::before { background: #ff7a45; }
+
+#mlf-status[data-tone="loading"]::before {
+  background: var(--mlf-amber);
+  animation: mlf-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mlf-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #mlf-panel .mlf-digit.roll i,
+  #mlf-status[data-tone="loading"]::before { animation: none; }
+}
+
+#mlf-panel ::selection { background: var(--mlf-amber); color: #12151a; }
+

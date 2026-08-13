@@ -1,0 +1,45 @@
+<div class="mlf-head">
+  <div>
+    <div class="mlf-odo" id="mlf-odo"></div>
+    <div class="mlf-cap">Listings loaded</div>
+  </div>
+  <button id="mlf-title" class="mlf-toggle" type="button" aria-expanded="true" aria-controls="mlf-body" aria-label="Collapse filters"><span id="mlf-toggle">&minus;</span></button>
+</div>
+<div class="mlf-body" id="mlf-body">
+  <div class="mlf-field">
+    <label class="mlf-label" for="mlf-q">Search</label>
+    <input id="mlf-q" type="text" placeholder="m3 xdrive" />
+  </div>
+  <div class="mlf-field">
+    <label class="mlf-label" for="mlf-ymin">Year</label>
+    <div class="mlf-pair">
+      <input id="mlf-ymin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum year" />
+      <input id="mlf-ymax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum year" />
+    </div>
+  </div>
+  <div class="mlf-field">
+    <label class="mlf-label" for="mlf-pmin">Price</label>
+    <div class="mlf-pair">
+      <input id="mlf-pmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum price" />
+      <input id="mlf-pmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum price" />
+    </div>
+  </div>
+  <div class="mlf-field">
+    <label class="mlf-label" for="mlf-mmin">Miles</label>
+    <div class="mlf-pair">
+      <input id="mlf-mmin" class="mlf-num" type="text" inputmode="numeric" placeholder="min" aria-label="Minimum miles" />
+      <input id="mlf-mmax" class="mlf-num" type="text" inputmode="numeric" placeholder="max" aria-label="Maximum miles" />
+    </div>
+  </div>
+  <label class="mlf-check" for="mlf-sold">
+    <input id="mlf-sold" type="checkbox" />
+    Hide sold listings
+  </label>
+  <div class="mlf-actions">
+    <button id="mlf-apply" class="mlf-btn primary" type="button">Apply</button>
+    <button id="mlf-reset" class="mlf-btn" type="button">Reset</button>
+  </div>
+  <button id="mlf-load" class="mlf-btn ghost" type="button">Load inventory</button>
+  <div id="mlf-status" data-tone="neutral"></div>
+</div>
+

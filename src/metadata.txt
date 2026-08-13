@@ -1,0 +1,11 @@
+// ==UserScript==
+// @name         MListCo Vehicle Filter
+// @namespace    https://mlistco.com/
+// @version      1.5.0
+// @description  Filter vehicle listings on mlistco.com by make/model, year, price, and mileage
+// @match        *://mlistco.com/*
+// @match        *://*.mlistco.com/*
+// @run-at       document-start
+// @grant        none
+// ==/UserScript==
+
