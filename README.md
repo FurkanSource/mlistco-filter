@@ -20,7 +20,7 @@
 
 ![MListCo Vehicle Filter running on MListCo inventory](docs/assets/mlistco-filter-preview.jpg)
 
-<p align="center"><sub>Version 1.5.1 running on live MListCo vehicle inventory.</sub></p>
+<p align="center"><sub>Version 1.5.1 running on live MListCo vehicle inventory. P.S filter not applied in image</sub></p>
 
 ## Overview
 
