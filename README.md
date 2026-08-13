@@ -18,9 +18,9 @@
   </p>
 </div>
 
-![MListCo Vehicle Filter running on the local listings fixture](docs/assets/mlistco-filter-preview.png)
+![MListCo Vehicle Filter running on MListCo inventory](docs/assets/mlistco-filter-preview.jpg)
 
-<p align="center"><sub>Local browser fixture running the production v1.5.1 userscript bundle.</sub></p>
+<p align="center"><sub>Version 1.5.1 running on live MListCo vehicle inventory.</sub></p>
 
 ## Overview
 
