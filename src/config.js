@@ -1,7 +1,7 @@
 export const STORAGE_KEY = 'mlf_state_v2';
 export const NEW_TAB_KEY = 'mlf_new_tab_pending_v1';
 export const RETURN_KEY = 'mlf_return_state_v1';
-export const MILEAGE_CACHE_KEY = 'mlf_mileage_v1';
+export const MILEAGE_CACHE_KEY = 'mlf_mileage_v2';
 
 export const DEFAULT_STATE = {
   query: '',

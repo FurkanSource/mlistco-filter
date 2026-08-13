@@ -77,8 +77,10 @@ export function matches(parsed, state) {
   if (state.yearMax != null && parsed.year != null && parsed.year > state.yearMax) return false;
   if (state.priceMin != null && parsed.price != null && parsed.price < state.priceMin) return false;
   if (state.priceMax != null && parsed.price != null && parsed.price > state.priceMax) return false;
-  if (state.milesMin != null && parsed.miles != null && parsed.miles < state.milesMin) return false;
-  if (state.milesMax != null && parsed.miles != null && parsed.miles > state.milesMax) return false;
+  const mileageFilterActive = state.milesMin != null || state.milesMax != null;
+  if (mileageFilterActive && parsed.miles == null) return false;
+  if (state.milesMin != null && parsed.miles < state.milesMin) return false;
+  if (state.milesMax != null && parsed.miles > state.milesMax) return false;
   return true;
 }
 
@@ -89,14 +91,23 @@ export function createCardParser({ mileageRegistry } = {}) {
     lookupMiles: () => null,
   };
 
-  const parseCardCached = (card, index) => {
-    const key = `${card.textContent || ''}\0${registry.getVersion()}`;
+  const parseCardCached = (card) => {
+    const identityMarkup = card.querySelectorAll
+      ? Array.from(card.querySelectorAll('img, source, a[href]'))
+        .map((node) => [
+          node.getAttribute && node.getAttribute('src'),
+          node.getAttribute && node.getAttribute('srcset'),
+          node.getAttribute && node.getAttribute('href'),
+        ].filter(Boolean).join('|'))
+        .join('\n')
+      : '';
+    const key = `${card.textContent || ''}\0${identityMarkup}\0${registry.getVersion()}`;
     const cached = parseCache.get(card);
     if (cached && cached.key === key) return cached.parsed;
 
     const parsed = parseCard(card);
     if (parsed.miles === null) {
-      const found = registry.lookupMiles(parsed, index);
+      const found = registry.lookupMiles(card, parsed);
       if (found !== null && found !== undefined) parsed.miles = found;
     }
     parseCache.set(card, { key, parsed });

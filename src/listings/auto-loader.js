@@ -6,7 +6,7 @@ import { setStatus, updatePanelMeta } from '../ui/status.js';
 
 const MORE_RE = /^(show|load|view)\s+more\b|^more\s+(results|listings|cars)\b/i;
 
-export function createAutoLoader({ windowObject = window } = {}) {
+export function createAutoLoader({ windowObject = window, onCardsChanged = () => {} } = {}) {
   let autoLoading = false;
   let autoLoadingPromise = null;
 
@@ -110,6 +110,7 @@ export function createAutoLoader({ windowObject = window } = {}) {
         setStatus(`Stopped at ${loaded} listings — no more to load`, 'neutral');
       }
       updatePanelMeta(loaded);
+      onCardsChanged();
     }
   }
 

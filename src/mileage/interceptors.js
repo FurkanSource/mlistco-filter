@@ -5,6 +5,10 @@ export function isJsonContentType(value) {
   return typeof value === 'string' && /\bjson\b/i.test(value);
 }
 
+export function isMileageDataUrl(value) {
+  return /\/elasticsearch\/msearch(?:[/?#]|$)|\/api\/1\.1\/init\/data(?:[/?#]|$)/i.test(String(value || ''));
+}
+
 export function createDataInterceptors({
   ingestText,
   ingestValue,
@@ -15,19 +19,16 @@ export function createDataInterceptors({
 
   function maybeIngestResponse(response) {
     if (!response || !response.headers || typeof response.clone !== 'function') return;
-    if (!isJsonContentType(response.headers.get('content-type'))) return;
+    const sourceUrl = response.url || '';
+    if (!isJsonContentType(response.headers.get('content-type')) && !isMileageDataUrl(sourceUrl)) return;
     const length = Number(response.headers.get('content-length'));
     if (Number.isFinite(length) && length > MAX_BODY_BYTES) return;
-    if (inflightReads >= MAX_INFLIGHT_READS) return;
+    if (inflightReads >= MAX_INFLIGHT_READS && !isMileageDataUrl(sourceUrl)) return;
     inflightReads++;
     response.clone().text()
-      .then((text) => {
-        inflightReads--;
-        ingestText(text);
-      })
-      .catch(() => {
-        inflightReads--;
-      });
+      .then((text) => ingestText(text, sourceUrl))
+      .catch(() => {})
+      .finally(() => { inflightReads--; });
   }
 
   function install() {
@@ -61,10 +62,13 @@ export function createDataInterceptors({
           this.addEventListener('load', () => {
             try {
               const type = this.getResponseHeader && this.getResponseHeader('content-type');
-              if (!isJsonContentType(type)) return;
+              if (!isJsonContentType(type) && !isMileageDataUrl(this.__mlfUrl)) return;
               const responseType = this.responseType;
-              if (responseType === '' || responseType === 'text') ingestText(this.responseText);
-              else if (responseType === 'json') ingestValue(this.response);
+              if (responseType === '' || responseType === 'text') {
+                if (typeof this.responseText === 'string' && this.responseText.length <= MAX_BODY_BYTES) {
+                  ingestText(this.responseText, this.__mlfUrl);
+                }
+              } else if (responseType === 'json') ingestValue(this.response, this.__mlfUrl);
             } catch (_) {}
           });
         } catch (_) {}

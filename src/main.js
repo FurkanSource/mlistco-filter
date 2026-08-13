@@ -24,14 +24,14 @@ const navigationStore = createNavigationStore();
 let filterController;
 const mileageRegistry = createMileageRegistry({
   onRegistryChanged: () => {
-    if (document.getElementById('mlf-panel')) filterController.applyFilterIfActive();
+    if (document.getElementById('mlf-panel')) filterController.scheduleApplyIfActive();
   },
 });
 
 const cardParser = createCardParser({ mileageRegistry });
 filterController = createFilterController({ filterStore, cardParser });
 
-const autoLoader = createAutoLoader();
+const autoLoader = createAutoLoader({ onCardsChanged: () => filterController.scheduleApplyIfActive() });
 const panel = createPanel({ filterStore, filterController, autoLoader });
 const dataInterceptors = createDataInterceptors({
   ingestText: mileageRegistry.ingestText,
@@ -60,6 +60,7 @@ function boot() {
   attempt('finalizePendingNewTab', tabContinuity.finalizePendingNewTab);
   attempt('installNewTabHook', tabContinuity.installNewTabHook);
   attempt('watchUrlChanges', historyWatcher.install);
+  attempt('watchListingChanges', filterController.installDomWatcher);
   if (isListingsPath(location.pathname)) {
     setTimeout(() => {
       attempt('restoreListingsPosition', returnRestorer.restoreListingsPosition);
@@ -75,4 +76,4 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 
 attempt('installDataInterceptors', dataInterceptors.install);
 attempt('loadMileageCache', mileageRegistry.loadCache);
-
+attempt('installMileageStorageSync', mileageRegistry.installStorageSync);

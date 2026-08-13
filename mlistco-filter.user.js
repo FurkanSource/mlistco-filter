@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MListCo Vehicle Filter
 // @namespace    https://mlistco.com/
-// @version      1.5.0
+// @version      1.5.1
 // @description  Filter vehicle listings on mlistco.com by make/model, year, price, and mileage
 // @match        *://mlistco.com/*
 // @match        *://*.mlistco.com/*
@@ -14,7 +14,7 @@
   var STORAGE_KEY = "mlf_state_v2";
   var NEW_TAB_KEY = "mlf_new_tab_pending_v1";
   var RETURN_KEY = "mlf_return_state_v1";
-  var MILEAGE_CACHE_KEY = "mlf_mileage_v1";
+  var MILEAGE_CACHE_KEY = "mlf_mileage_v2";
   var DEFAULT_STATE = {
     query: "",
     yearMin: null,
@@ -520,8 +520,10 @@
     if (state.yearMax != null && parsed.year != null && parsed.year > state.yearMax) return false;
     if (state.priceMin != null && parsed.price != null && parsed.price < state.priceMin) return false;
     if (state.priceMax != null && parsed.price != null && parsed.price > state.priceMax) return false;
-    if (state.milesMin != null && parsed.miles != null && parsed.miles < state.milesMin) return false;
-    if (state.milesMax != null && parsed.miles != null && parsed.miles > state.milesMax) return false;
+    const mileageFilterActive = state.milesMin != null || state.milesMax != null;
+    if (mileageFilterActive && parsed.miles == null) return false;
+    if (state.milesMin != null && parsed.miles < state.milesMin) return false;
+    if (state.milesMax != null && parsed.miles > state.milesMax) return false;
     return true;
   }
   function createCardParser({ mileageRegistry: mileageRegistry2 } = {}) {
@@ -530,13 +532,18 @@
       getVersion: () => 0,
       lookupMiles: () => null
     };
-    const parseCardCached = (card, index) => {
-      const key = `${card.textContent || ""}\0${registry.getVersion()}`;
+    const parseCardCached = (card) => {
+      const identityMarkup = card.querySelectorAll ? Array.from(card.querySelectorAll("img, source, a[href]")).map((node) => [
+        node.getAttribute && node.getAttribute("src"),
+        node.getAttribute && node.getAttribute("srcset"),
+        node.getAttribute && node.getAttribute("href")
+      ].filter(Boolean).join("|")).join("\n") : "";
+      const key = `${card.textContent || ""}\0${identityMarkup}\0${registry.getVersion()}`;
       const cached = parseCache.get(card);
       if (cached && cached.key === key) return cached.parsed;
       const parsed = parseCard(card);
       if (parsed.miles === null) {
-        const found = registry.lookupMiles(parsed, index);
+        const found = registry.lookupMiles(card, parsed);
         if (found !== null && found !== void 0) parsed.miles = found;
       }
       parseCache.set(card, { key, parsed });
@@ -546,8 +553,13 @@
   }
 
   // src/listings/cards.js
+  function isListingCard(card) {
+    if (!card) return false;
+    if (String(card.textContent || "").trim()) return true;
+    return Boolean(card.querySelector && card.querySelector('img[src], source[srcset], a[href*="/classified/"]'));
+  }
   function getCards(root = globalThis.document, selector = CARD_SELECTOR) {
-    return Array.from(root.querySelectorAll(selector));
+    return Array.from(root.querySelectorAll(selector)).filter(isListingCard);
   }
   function showAllCards(cards) {
     for (const card of cards) card.style.display = "";
@@ -581,34 +593,80 @@
   }
 
   // src/listings/filter-controller.js
-  function createFilterController({ filterStore: filterStore2, cardParser: cardParser2 }) {
+  function createFilterController({
+    filterStore: filterStore2,
+    cardParser: cardParser2,
+    documentObject = globalThis.document,
+    locationObject = globalThis.location,
+    MutationObserverClass = globalThis.MutationObserver,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout
+  } = {}) {
     let lastCards = [];
+    let domObserver = null;
+    let applyTimer = null;
     function refreshPanelMeta() {
-      updatePanelMeta(getCards().length);
+      updatePanelMeta(getCards(documentObject).length);
     }
     function applyFilter() {
-      const cards = getCards();
+      const cards = getCards(documentObject);
       lastCards = cards;
-      if (!cards.length && isListingsPath(location.pathname)) {
+      if (!cards.length && isListingsPath(locationObject.pathname)) {
         log("card selector matched nothing", CARD_SELECTOR);
         setStatus("No listings found — the page markup may have changed", "warning");
         refreshPanelMeta();
         return;
       }
       showAllCards(cards);
-      const parsedCards = cards.map((card, index) => cardParser2.parseCardCached(card, index));
+      const parsedCards = cards.map((card) => cardParser2.parseCardCached(card));
+      const mileageFilterActive = filterStore2.state.milesMin != null || filterStore2.state.milesMax != null;
+      const unknownMileage = mileageFilterActive ? parsedCards.filter((parsed) => parsed.miles == null).length : 0;
       let shown = 0;
       for (let index = 0; index < cards.length; index++) {
         const visible = matches(parsedCards[index], filterStore2.state);
         cards[index].style.display = visible ? "" : "none";
         if (visible) shown++;
       }
-      setStatus(`${shown} of ${cards.length} shown`, shown === cards.length ? "neutral" : "success");
+      const coverage = unknownMileage ? ` | ${unknownMileage} mileage unknown` : "";
+      const tone = unknownMileage ? "warning" : shown === cards.length ? "neutral" : "success";
+      setStatus(`${shown} of ${cards.length} shown${coverage}`, tone);
       refreshPanelMeta();
     }
     function applyFilterIfActive() {
       if (filterStore2.hasAnyFilter()) applyFilter();
       else refreshPanelMeta();
+    }
+    function scheduleApplyIfActive(delayMs = 100) {
+      if (!filterStore2.hasAnyFilter() || !isListingsPath(locationObject.pathname)) return;
+      clearTimeoutFn(applyTimer);
+      applyTimer = setTimeoutFn(() => {
+        applyTimer = null;
+        applyFilterIfActive();
+      }, delayMs);
+    }
+    function installDomWatcher() {
+      if (domObserver || !MutationObserverClass || !documentObject.body) return;
+      domObserver = new MutationObserverClass((records) => {
+        const relevant = records.some((record) => {
+          const target = record.target && record.target.nodeType === 1 ? record.target : record.target && record.target.parentElement;
+          if (target && target.closest && target.closest("#mlf-panel")) return false;
+          if (record.type === "attributes") return true;
+          return record.addedNodes.length > 0 || record.removedNodes.length > 0;
+        });
+        if (relevant) scheduleApplyIfActive();
+      });
+      domObserver.observe(documentObject.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["src", "srcset", "href", "data-src", "data-original"]
+      });
+    }
+    function disconnectDomWatcher() {
+      clearTimeoutFn(applyTimer);
+      applyTimer = null;
+      if (domObserver) domObserver.disconnect();
+      domObserver = null;
     }
     function resetVisibleCards() {
       showAllCards(lastCards);
@@ -616,14 +674,18 @@
     return {
       applyFilter,
       applyFilterIfActive,
+      disconnectDomWatcher,
+      installDomWatcher,
       refreshPanelMeta,
-      resetVisibleCards
+      resetVisibleCards,
+      scheduleApplyIfActive
     };
   }
 
   // src/listings/auto-loader.js
   var MORE_RE = /^(show|load|view)\s+more\b|^more\s+(results|listings|cars)\b/i;
-  function createAutoLoader({ windowObject = window } = {}) {
+  function createAutoLoader({ windowObject = window, onCardsChanged = () => {
+  } } = {}) {
     let autoLoading = false;
     let autoLoadingPromise = null;
     function getCardScrollContainer() {
@@ -722,6 +784,7 @@
           setStatus(`Stopped at ${loaded} listings — no more to load`, "neutral");
         }
         updatePanelMeta(loaded);
+        onCardsChanged();
       }
     }
     return {
@@ -739,12 +802,17 @@
   var PRICE_KEY_RE = /(price|asking|cost)/i;
   var YEAR_KEY_RE = /(^year$|model.?year|^yr$)/i;
   var ID_KEY_RE = /^(_id|id|unique ?id)$/i;
+  var TITLE_KEY_RE = /^(title(?:_text)?|vehicle.?title(?:_text)?|listing.?title(?:_text)?)$/i;
+  var LOCATION_KEY_RE = /(seller.?location|^location$|city)/i;
+  var SLUG_KEY_RE = /^slug$/i;
+  var IMAGE_KEY_RE = /(all.?images|image|photo|picture)/i;
+  var BUBBLE_ASSET_RE = /(?:^|\/)(f\d{10,}x\d{10,})(?=\/|%2f|$)/ig;
+  var YEAR_RE2 = /\b(19\d{2}|20[0-4]\d)\b/;
   var KM_TO_MILES2 = 0.621371;
+  var CACHE_SCHEMA_VERSION = 2;
+  var CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+  var MAX_CACHE_RECORDS = 3e3;
   var AMBIGUOUS = /* @__PURE__ */ Symbol("ambiguous");
-  function signatureOf(price, year) {
-    if (price === null || price === void 0 || year === null || year === void 0) return null;
-    return `${price}|${year}`;
-  }
   function numericValue(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
     if (typeof value === "string") {
@@ -753,170 +821,416 @@
     }
     return null;
   }
+  function normalizeIdentityText(value) {
+    return normalizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function extractBubbleAssetTokens(value) {
+    const tokens = /* @__PURE__ */ new Set();
+    const text = String(value || "");
+    BUBBLE_ASSET_RE.lastIndex = 0;
+    let match;
+    while ((match = BUBBLE_ASSET_RE.exec(text)) !== null) tokens.add(match[1].toLowerCase());
+    return Array.from(tokens);
+  }
+  function extractBubbleAssetToken(value) {
+    return extractBubbleAssetTokens(value)[0] || null;
+  }
+  function firstScalar(value) {
+    if (Array.isArray(value)) return value.length ? firstScalar(value[0]) : null;
+    return value !== null && value !== void 0 && typeof value !== "object" ? value : null;
+  }
+  function firstMatchingValue(object, keyPattern) {
+    for (const key of Object.keys(object || {})) {
+      if (!keyPattern.test(key)) continue;
+      const value = firstScalar(object[key]);
+      if (value !== null) return { key, value };
+    }
+    return { key: null, value: null };
+  }
+  function firstImageToken(object) {
+    for (const key of Object.keys(object || {})) {
+      if (!IMAGE_KEY_RE.test(key)) continue;
+      const values = Array.isArray(object[key]) ? object[key] : [object[key]];
+      for (const value of values) {
+        const token = extractBubbleAssetToken(value);
+        if (token) return token;
+      }
+    }
+    return null;
+  }
+  function createRecord(object, inheritedId = null) {
+    if (!object || typeof object !== "object" || Array.isArray(object)) return null;
+    const mileageField = firstMatchingValue(object, MILEAGE_KEY_RE);
+    const parsedMileage = numericValue(mileageField.value);
+    if (parsedMileage === null || parsedMileage < 0 || parsedMileage >= 2e6) return null;
+    const idField = firstMatchingValue(object, ID_KEY_RE);
+    const slugField = firstMatchingValue(object, SLUG_KEY_RE);
+    const titleField = firstMatchingValue(object, TITLE_KEY_RE);
+    const priceField = firstMatchingValue(object, PRICE_KEY_RE);
+    const locationField = firstMatchingValue(object, LOCATION_KEY_RE);
+    const yearField = firstMatchingValue(object, YEAR_KEY_RE);
+    const title = String(titleField.value || "");
+    const titleYear = title.match(YEAR_RE2);
+    const explicitYear = numericValue(yearField.value);
+    const year = explicitYear && explicitYear > 1900 && explicitYear < 2050 ? Math.round(explicitYear) : titleYear ? Number(titleYear[1]) : null;
+    const priceValue = numericValue(priceField.value);
+    const id = idField.value ?? inheritedId;
+    return {
+      id: id === null || id === void 0 ? null : String(id),
+      slug: slugField.value === null ? null : String(slugField.value),
+      miles: KM_KEY_RE.test(mileageField.key || "") ? Math.round(parsedMileage * KM_TO_MILES2) : Math.round(parsedMileage),
+      title,
+      titleKey: normalizeIdentityText(title),
+      price: priceValue !== null && priceValue > 0 ? Math.round(priceValue) : null,
+      year,
+      location: String(locationField.value || ""),
+      locationKey: normalizeIdentityText(locationField.value || ""),
+      asset: firstImageToken(object)
+    };
+  }
+  function stableRecordKey(record) {
+    if (record.id) return `id:${record.id}`;
+    if (record.slug) return `slug:${record.slug}`;
+    if (record.asset) return `asset:${record.asset}`;
+    if (record.titleKey && record.price !== null && record.locationKey) {
+      return `text:${record.titleKey}|${record.price}|${record.locationKey}`;
+    }
+    return null;
+  }
+  function recordsEqual(left, right) {
+    return left.id === right.id && left.slug === right.slug && left.miles === right.miles && left.title === right.title && left.price === right.price && left.year === right.year && left.location === right.location && left.asset === right.asset;
+  }
+  function recordDataScore(record) {
+    return [record.id, record.slug, record.title, record.price, record.year, record.location, record.asset].filter((value) => value !== null && value !== void 0 && value !== "").length;
+  }
+  function mergeRecord(existing, incoming) {
+    const existingUpdatedAt = Number(existing.updatedAt) || 0;
+    const incomingUpdatedAt = Number(incoming.updatedAt) || 0;
+    const incomingIsNewer = incomingUpdatedAt > existingUpdatedAt || incomingUpdatedAt === existingUpdatedAt && recordDataScore(incoming) >= recordDataScore(existing);
+    const primary = incomingIsNewer ? incoming : existing;
+    const secondary = primary === incoming ? existing : incoming;
+    const record = {
+      id: primary.id || secondary.id,
+      slug: primary.slug || secondary.slug,
+      miles: primary.miles,
+      title: primary.title || secondary.title,
+      price: primary.price ?? secondary.price,
+      year: primary.year ?? secondary.year,
+      location: primary.location || secondary.location,
+      asset: primary.asset || secondary.asset,
+      updatedAt: Math.max(existingUpdatedAt, incomingUpdatedAt)
+    };
+    record.titleKey = normalizeIdentityText(record.title);
+    record.locationKey = normalizeIdentityText(record.location);
+    return record;
+  }
+  function serializeRecord(record) {
+    return {
+      i: record.id,
+      s: record.slug,
+      m: record.miles,
+      t: record.title,
+      p: record.price,
+      y: record.year,
+      l: record.location,
+      a: record.asset,
+      u: record.updatedAt
+    };
+  }
+  function deserializeRecord(value, fallbackUpdatedAt) {
+    if (!value || typeof value !== "object") return null;
+    const miles = Number(value.m);
+    if (!Number.isFinite(miles) || miles < 0 || miles >= 2e6) return null;
+    const record = {
+      id: value.i == null ? null : String(value.i),
+      slug: value.s == null ? null : String(value.s),
+      miles: Math.round(miles),
+      title: typeof value.t === "string" ? value.t : "",
+      price: value.p != null && Number.isFinite(Number(value.p)) ? Number(value.p) : null,
+      year: value.y != null && Number.isFinite(Number(value.y)) ? Number(value.y) : null,
+      location: typeof value.l === "string" ? value.l : "",
+      asset: typeof value.a === "string" ? value.a : null,
+      updatedAt: value.u != null && Number.isFinite(Number(value.u)) ? Number(value.u) : fallbackUpdatedAt
+    };
+    record.titleKey = normalizeIdentityText(record.title);
+    record.locationKey = normalizeIdentityText(record.location);
+    return stableRecordKey(record) ? record : null;
+  }
+  function collectCardAssetTokens(card) {
+    const tokens = new Set(extractBubbleAssetTokens(card && card.outerHTML));
+    if (!card || typeof card.querySelectorAll !== "function") return Array.from(tokens);
+    for (const node of card.querySelectorAll("img, source, [style], [data-src], [data-original]")) {
+      const values = [
+        node.currentSrc,
+        node.src,
+        node.srcset,
+        node.getAttribute && node.getAttribute("src"),
+        node.getAttribute && node.getAttribute("srcset"),
+        node.getAttribute && node.getAttribute("data-src"),
+        node.getAttribute && node.getAttribute("data-original"),
+        node.getAttribute && node.getAttribute("style")
+      ];
+      for (const value of values) {
+        for (const token of extractBubbleAssetTokens(value)) tokens.add(token);
+      }
+    }
+    return Array.from(tokens);
+  }
+  function collectCardSlugs(card) {
+    const slugs = /* @__PURE__ */ new Set();
+    if (!card || typeof card.querySelectorAll !== "function") return slugs;
+    for (const link of card.querySelectorAll("a[href]")) {
+      const href = link.getAttribute("href") || "";
+      const match = href.match(/\/classified\/([^/?#]+)/i);
+      if (match) {
+        try {
+          slugs.add(decodeURIComponent(match[1]));
+        } catch (_) {
+          slugs.add(match[1]);
+        }
+      }
+    }
+    return slugs;
+  }
   function createMileageRegistry({
     storage,
     logger = log,
     onRegistryChanged = () => {
-    }
+    },
+    now = Date.now
   } = {}) {
     const getStorage = () => storage === void 0 ? globalThis.localStorage : storage;
-    const mileageById = /* @__PURE__ */ new Map();
-    const mileageBySignature = /* @__PURE__ */ new Map();
-    const mileageByOrder = [];
-    const seenRecordIds = /* @__PURE__ */ new Set();
-    const seenMileageFields = /* @__PURE__ */ new Set();
+    const records = /* @__PURE__ */ new Map();
+    let byId = /* @__PURE__ */ new Map();
+    let bySlug = /* @__PURE__ */ new Map();
+    let byAsset = /* @__PURE__ */ new Map();
+    let byPrice = /* @__PURE__ */ new Map();
     let registryVersion = 0;
-    function extractRecord(object) {
-      let miles = null;
-      let milesKey = null;
-      let id = null;
-      let price = null;
-      let year = null;
-      for (const key of Object.keys(object)) {
-        const value = object[key];
-        if (value && typeof value === "object") continue;
-        if (miles === null && MILEAGE_KEY_RE.test(key)) {
-          const parsed = numericValue(value);
-          if (parsed !== null && parsed >= 0 && parsed < 2e6) {
-            miles = KM_KEY_RE.test(key) ? Math.round(parsed * KM_TO_MILES2) : Math.round(parsed);
-            milesKey = key;
+    let storageSyncInstalled = false;
+    function indexUnique(index, key, record) {
+      if (!key) return;
+      const existing = index.get(key);
+      if (existing === void 0) index.set(key, record);
+      else if (existing !== AMBIGUOUS && stableRecordKey(existing) !== stableRecordKey(record)) {
+        index.set(key, AMBIGUOUS);
+      }
+    }
+    function rebuildIndexes() {
+      byId = /* @__PURE__ */ new Map();
+      bySlug = /* @__PURE__ */ new Map();
+      byAsset = /* @__PURE__ */ new Map();
+      byPrice = /* @__PURE__ */ new Map();
+      for (const record of records.values()) {
+        indexUnique(byId, record.id, record);
+        indexUnique(bySlug, record.slug, record);
+        indexUnique(byAsset, record.asset, record);
+        if (record.price !== null) {
+          if (!byPrice.has(record.price)) byPrice.set(record.price, []);
+          byPrice.get(record.price).push(record);
+        }
+      }
+    }
+    function mergeRecords(incoming) {
+      let changed = 0;
+      let refreshed = 0;
+      for (const nextRecord of incoming) {
+        let key = stableRecordKey(nextRecord);
+        if (!key) continue;
+        let existing = records.get(key);
+        let existingKey = existing ? key : null;
+        if (!existing) {
+          const aliases = /* @__PURE__ */ new Map();
+          const addAlias = (candidate) => {
+            if (candidate && candidate !== AMBIGUOUS) aliases.set(stableRecordKey(candidate), candidate);
+          };
+          if (nextRecord.id) addAlias(byId.get(nextRecord.id));
+          if (nextRecord.slug) addAlias(bySlug.get(nextRecord.slug));
+          if (nextRecord.asset) addAlias(byAsset.get(nextRecord.asset));
+          if (aliases.size === 1) {
+            [existingKey, existing] = aliases.entries().next().value;
           }
         }
-        if (id === null && ID_KEY_RE.test(key) && typeof value === "string") id = value;
-        if (price === null && PRICE_KEY_RE.test(key)) {
-          const parsed = numericValue(value);
-          if (parsed !== null && parsed > 0) price = Math.round(parsed);
-        }
-        if (year === null && YEAR_KEY_RE.test(key)) {
-          const parsed = numericValue(value);
-          if (parsed !== null && parsed > 1900 && parsed < 2050) year = Math.round(parsed);
-        }
-      }
-      if (miles === null) return null;
-      if (milesKey && !seenMileageFields.has(milesKey)) {
-        seenMileageFields.add(milesKey);
-        logger("mileage field discovered in network data:", milesKey, "=", miles);
-      }
-      return { id, miles, price, year };
-    }
-    function addRecord(record) {
-      if (record.id) {
-        if (seenRecordIds.has(record.id)) return false;
-        seenRecordIds.add(record.id);
-        mileageById.set(record.id, record.miles);
-      }
-      mileageByOrder.push(record.miles);
-      const signature = signatureOf(record.price, record.year);
-      if (signature) {
-        const existing = mileageBySignature.get(signature);
-        if (existing !== void 0 && existing !== record.miles) {
-          mileageBySignature.set(signature, AMBIGUOUS);
-        } else if (existing === void 0) {
-          mileageBySignature.set(signature, record.miles);
-        }
-      }
-      return true;
-    }
-    function harvestJson(root) {
-      let added = 0;
-      let nodes = 0;
-      const stack = [[root, 0]];
-      while (stack.length && nodes < 4e4) {
-        const [node, depth] = stack.pop();
-        nodes++;
-        if (!node || typeof node !== "object" || depth > 14) continue;
-        if (Array.isArray(node)) {
-          for (const item of node) stack.push([item, depth + 1]);
+        const record = existing ? mergeRecord(existing, nextRecord) : nextRecord;
+        key = stableRecordKey(record);
+        if (existing && existingKey === key && recordsEqual(existing, record)) {
+          if (record.updatedAt !== existing.updatedAt) {
+            records.set(key, record);
+            refreshed++;
+          }
           continue;
         }
-        const record = extractRecord(node);
-        if (record && addRecord(record)) added++;
-        for (const key of Object.keys(node)) {
-          const value = node[key];
+        if (existingKey && existingKey !== key) records.delete(existingKey);
+        records.set(key, record);
+        changed++;
+        rebuildIndexes();
+      }
+      return { changed, refreshed };
+    }
+    function extractRecords(root) {
+      const found = [];
+      const visited = /* @__PURE__ */ new Set();
+      const stack = [[root, 0, null]];
+      let nodes = 0;
+      while (stack.length && nodes < 4e4) {
+        const [node, depth, inheritedId] = stack.pop();
+        nodes++;
+        if (!node || typeof node !== "object" || depth > 14 || visited.has(node)) continue;
+        visited.add(node);
+        if (Array.isArray(node)) {
+          for (let index = node.length - 1; index >= 0; index--) {
+            stack.push([node[index], depth + 1, inheritedId]);
+          }
+          continue;
+        }
+        const source = node._source && typeof node._source === "object" ? node._source : null;
+        if (source) {
+          const record = createRecord(source, node._id ?? source._id ?? inheritedId);
+          if (record) found.push(record);
+        } else {
+          const record = createRecord(node, inheritedId);
+          if (record) found.push(record);
+        }
+        const entries = Object.entries(node);
+        for (let index = entries.length - 1; index >= 0; index--) {
+          const [key, value] = entries[index];
+          if (source && key === "_source") continue;
           if (value && typeof value === "object") {
-            stack.push([value, depth + 1]);
+            stack.push([value, depth + 1, node._id ?? inheritedId]);
           } else if (typeof value === "string" && value.length > 20 && MILEAGE_HINT_RE.test(value)) {
             const head = value.slice(0, 40).trim();
             if (head.startsWith("{") || head.startsWith("[")) {
               try {
-                stack.push([JSON.parse(value), depth + 1]);
+                stack.push([JSON.parse(value), depth + 1, inheritedId]);
               } catch (_) {
               }
             }
           }
         }
       }
-      return added;
-    }
-    function ingestValue(value) {
-      if (!value || typeof value !== "object") return;
-      const added = harvestJson(value);
-      if (!added) return;
-      registryVersion++;
-      saveCache();
-      logger("mileage records captured:", added, "total:", mileageByOrder.length);
-      onRegistryChanged();
-    }
-    function ingestText(text) {
-      if (typeof text !== "string" || !text || text.length > 5e6) return;
-      const head = text.slice(0, 200).trim();
-      if (!head.startsWith("{") && !head.startsWith("[")) return;
-      if (!MILEAGE_HINT_RE.test(text)) return;
-      let value;
-      try {
-        value = JSON.parse(text);
-      } catch (_) {
-        return;
-      }
-      ingestValue(value);
-    }
-    function loadCache() {
-      try {
-        const raw = getStorage().getItem(MILEAGE_CACHE_KEY);
-        if (!raw) return;
-        const list = JSON.parse(raw);
-        if (!Array.isArray(list)) return;
-        for (const item of list) {
-          if (!item || typeof item !== "object") continue;
-          const miles = Number(item.m);
-          if (!Number.isFinite(miles)) continue;
-          if (item.i) mileageById.set(String(item.i), miles);
-          const signature = signatureOf(item.p ?? null, item.y ?? null);
-          if (signature && !mileageBySignature.has(signature)) mileageBySignature.set(signature, miles);
-        }
-        registryVersion++;
-        logger("mileage cache loaded:", mileageById.size, "by id,", mileageBySignature.size, "by signature");
-      } catch (_) {
-      }
+      return found;
     }
     function saveCache() {
       try {
-        const list = [];
-        for (const [signature, miles] of mileageBySignature) {
-          if (miles === AMBIGUOUS || list.length >= 3e3) continue;
-          const [price, year] = signature.split("|");
-          list.push({ p: Number(price), y: Number(year), m: miles });
-        }
-        getStorage().setItem(MILEAGE_CACHE_KEY, JSON.stringify(list));
+        const payload = {
+          version: CACHE_SCHEMA_VERSION,
+          savedAt: now(),
+          records: Array.from(records.values()).slice(-MAX_CACHE_RECORDS).map(serializeRecord)
+        };
+        getStorage().setItem(MILEAGE_CACHE_KEY, JSON.stringify(payload));
       } catch (_) {
       }
     }
-    function lookupMiles(parsed, index) {
-      const signature = signatureOf(parsed.price, parsed.year);
-      if (signature) {
-        const hit = mileageBySignature.get(signature);
-        if (hit !== void 0 && hit !== AMBIGUOUS) return hit;
+    function parseCache(raw) {
+      if (!raw) return [];
+      const payload = JSON.parse(raw);
+      if (!payload || payload.version !== CACHE_SCHEMA_VERSION || !Array.isArray(payload.records)) return [];
+      if (!Number.isFinite(payload.savedAt) || now() - payload.savedAt > CACHE_TTL_MS) return [];
+      return payload.records.map((record) => deserializeRecord(record, payload.savedAt)).filter(Boolean);
+    }
+    function mergeCache(raw, notify = false) {
+      try {
+        const { changed } = mergeRecords(parseCache(raw));
+        if (!changed) return 0;
+        registryVersion++;
+        logger("mileage cache merged:", changed, "records");
+        if (notify) onRegistryChanged();
+        return changed;
+      } catch (_) {
+        return 0;
       }
-      if (typeof index === "number" && index >= 0 && index < mileageByOrder.length) {
-        return mileageByOrder[index];
+    }
+    function loadCache() {
+      try {
+        mergeCache(getStorage().getItem(MILEAGE_CACHE_KEY), false);
+      } catch (_) {
       }
-      return null;
+    }
+    function ingestValue(value, sourceUrl = "") {
+      if (!value || typeof value !== "object") return 0;
+      const observedAt = now();
+      const incoming = extractRecords(value).map((record) => ({ ...record, updatedAt: observedAt }));
+      const { changed, refreshed } = mergeRecords(incoming);
+      if (!changed && !refreshed) return 0;
+      saveCache();
+      if (!changed) return 0;
+      registryVersion++;
+      logger("mileage records captured:", changed, "total:", records.size, "from:", sourceUrl || "unknown");
+      onRegistryChanged();
+      return changed;
+    }
+    function ingestText(text, sourceUrl = "") {
+      if (typeof text !== "string" || !text || text.length > 5e6) return 0;
+      const head = text.slice(0, 200).trim();
+      if (!head.startsWith("{") && !head.startsWith("[")) return 0;
+      if (!MILEAGE_HINT_RE.test(text)) return 0;
+      try {
+        return ingestValue(JSON.parse(text), sourceUrl);
+      } catch (_) {
+        return 0;
+      }
+    }
+    function resolveStrongIdentity(card) {
+      const candidates = /* @__PURE__ */ new Map();
+      let ambiguous = false;
+      const addCandidate = (record) => {
+        if (record === AMBIGUOUS) {
+          ambiguous = true;
+          return;
+        }
+        if (record) candidates.set(stableRecordKey(record), record);
+      };
+      for (const slug of collectCardSlugs(card)) addCandidate(bySlug.get(slug));
+      for (const asset of collectCardAssetTokens(card)) addCandidate(byAsset.get(asset));
+      if (ambiguous || candidates.size !== 1) return candidates.size > 1 || ambiguous ? AMBIGUOUS : null;
+      return candidates.values().next().value;
+    }
+    function resolveTextIdentity(card, parsed) {
+      if (!card || parsed.price === null || parsed.price === void 0) return null;
+      const identityTexts = /* @__PURE__ */ new Set();
+      for (const node of card.querySelectorAll("*")) {
+        const text = normalizeIdentityText(node.innerText || node.textContent || "");
+        if (text) identityTexts.add(text);
+      }
+      const candidates = (byPrice.get(parsed.price) || []).filter(
+        (record) => record.titleKey && record.locationKey && identityTexts.has(record.titleKey) && identityTexts.has(record.locationKey)
+      );
+      return candidates.length === 1 ? candidates[0] : null;
+    }
+    function lookupMiles(cardOrParsed, maybeParsed) {
+      const hasDomCard = cardOrParsed && typeof cardOrParsed.querySelectorAll === "function";
+      const card = hasDomCard ? cardOrParsed : null;
+      const parsed = hasDomCard ? maybeParsed : cardOrParsed;
+      if (!parsed) return null;
+      const strong = card ? resolveStrongIdentity(card) : null;
+      if (strong === AMBIGUOUS) return null;
+      if (strong) return strong.miles;
+      const textMatch = card ? resolveTextIdentity(card, parsed) : null;
+      return textMatch ? textMatch.miles : null;
+    }
+    function installStorageSync(windowObject = globalThis.window) {
+      if (storageSyncInstalled || !windowObject || typeof windowObject.addEventListener !== "function") return;
+      storageSyncInstalled = true;
+      windowObject.addEventListener("storage", (event) => {
+        if (event.key !== MILEAGE_CACHE_KEY || !event.newValue) return;
+        mergeCache(event.newValue, true);
+      });
+    }
+    function getStats() {
+      let ambiguousAssets = 0;
+      for (const value of byAsset.values()) if (value === AMBIGUOUS) ambiguousAssets++;
+      return {
+        records: records.size,
+        assets: Array.from(byAsset.values()).filter((value) => value !== AMBIGUOUS).length,
+        ambiguousAssets
+      };
     }
     return {
+      getStats,
       getVersion: () => registryVersion,
-      harvestJson,
+      harvestJson: (value) => ingestValue(value),
       ingestText,
       ingestValue,
+      installStorageSync,
       loadCache,
       lookupMiles,
       saveCache
@@ -927,6 +1241,9 @@
   function isJsonContentType(value) {
     return typeof value === "string" && /\bjson\b/i.test(value);
   }
+  function isMileageDataUrl(value) {
+    return /\/elasticsearch\/msearch(?:[/?#]|$)|\/api\/1\.1\/init\/data(?:[/?#]|$)/i.test(String(value || ""));
+  }
   function createDataInterceptors({
     ingestText,
     ingestValue,
@@ -936,15 +1253,14 @@
     let inflightReads = 0;
     function maybeIngestResponse(response) {
       if (!response || !response.headers || typeof response.clone !== "function") return;
-      if (!isJsonContentType(response.headers.get("content-type"))) return;
+      const sourceUrl = response.url || "";
+      if (!isJsonContentType(response.headers.get("content-type")) && !isMileageDataUrl(sourceUrl)) return;
       const length = Number(response.headers.get("content-length"));
       if (Number.isFinite(length) && length > MAX_BODY_BYTES) return;
-      if (inflightReads >= MAX_INFLIGHT_READS) return;
+      if (inflightReads >= MAX_INFLIGHT_READS && !isMileageDataUrl(sourceUrl)) return;
       inflightReads++;
-      response.clone().text().then((text) => {
-        inflightReads--;
-        ingestText(text);
-      }).catch(() => {
+      response.clone().text().then((text) => ingestText(text, sourceUrl)).catch(() => {
+      }).finally(() => {
         inflightReads--;
       });
     }
@@ -978,10 +1294,13 @@
             this.addEventListener("load", () => {
               try {
                 const type = this.getResponseHeader && this.getResponseHeader("content-type");
-                if (!isJsonContentType(type)) return;
+                if (!isJsonContentType(type) && !isMileageDataUrl(this.__mlfUrl)) return;
                 const responseType = this.responseType;
-                if (responseType === "" || responseType === "text") ingestText(this.responseText);
-                else if (responseType === "json") ingestValue(this.response);
+                if (responseType === "" || responseType === "text") {
+                  if (typeof this.responseText === "string" && this.responseText.length <= MAX_BODY_BYTES) {
+                    ingestText(this.responseText, this.__mlfUrl);
+                  }
+                } else if (responseType === "json") ingestValue(this.response, this.__mlfUrl);
               } catch (_) {
               }
             });
@@ -1609,12 +1928,12 @@
   var filterController;
   var mileageRegistry = createMileageRegistry({
     onRegistryChanged: () => {
-      if (document.getElementById("mlf-panel")) filterController.applyFilterIfActive();
+      if (document.getElementById("mlf-panel")) filterController.scheduleApplyIfActive();
     }
   });
   var cardParser = createCardParser({ mileageRegistry });
   filterController = createFilterController({ filterStore, cardParser });
-  var autoLoader = createAutoLoader();
+  var autoLoader = createAutoLoader({ onCardsChanged: () => filterController.scheduleApplyIfActive() });
   var panel = createPanel({ filterStore, filterController, autoLoader });
   var dataInterceptors = createDataInterceptors({
     ingestText: mileageRegistry.ingestText,
@@ -1642,6 +1961,7 @@
     attempt("finalizePendingNewTab", tabContinuity.finalizePendingNewTab);
     attempt("installNewTabHook", tabContinuity.installNewTabHook);
     attempt("watchUrlChanges", historyWatcher.install);
+    attempt("watchListingChanges", filterController.installDomWatcher);
     if (isListingsPath(location.pathname)) {
       setTimeout(() => {
         attempt("restoreListingsPosition", returnRestorer.restoreListingsPosition);
@@ -1655,4 +1975,5 @@
   }
   attempt("installDataInterceptors", dataInterceptors.install);
   attempt("loadMileageCache", mileageRegistry.loadCache);
+  attempt("installMileageStorageSync", mileageRegistry.installStorageSync);
 })();

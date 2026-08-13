@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createDataInterceptors, isJsonContentType } from '../src/mileage/interceptors.js';
+import {
+  createDataInterceptors,
+  isJsonContentType,
+  isMileageDataUrl,
+} from '../src/mileage/interceptors.js';
 
 test('JSON content type recognition is case-insensitive and bounded to JSON', () => {
   assert.equal(isJsonContentType('application/json; charset=utf-8'), true);
@@ -8,9 +12,16 @@ test('JSON content type recognition is case-insensitive and bounded to JSON', ()
   assert.equal(isJsonContentType('text/html'), false);
 });
 
+test('mileage endpoints are recognized independently of response MIME type', () => {
+  assert.equal(isMileageDataUrl('/elasticsearch/msearch'), true);
+  assert.equal(isMileageDataUrl('/api/1.1/init/data?location=x'), true);
+  assert.equal(isMileageDataUrl('/unrelated'), false);
+});
+
 test('fetch interception preserves the original response and ingests a clone', async () => {
   const ingested = [];
   const response = {
+    url: 'https://mlistco.com/elasticsearch/msearch',
     headers: {
       get(name) {
         if (name === 'content-type') return 'application/json';
@@ -27,7 +38,7 @@ test('fetch interception preserves the original response and ingests a clone', a
     XMLHttpRequest: null,
   };
   const interceptors = createDataInterceptors({
-    ingestText: (value) => ingested.push(value),
+    ingestText: (...values) => ingested.push(values),
     ingestValue: () => {},
     logger: () => {},
     windowObject,
@@ -37,10 +48,12 @@ test('fetch interception preserves the original response and ingests a clone', a
   const returned = await windowObject.fetch('/api');
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(returned, response);
-  assert.deepEqual(ingested, ['{"mileage":123}']);
+  assert.deepEqual(ingested, [[
+    '{"mileage":123}',
+    'https://mlistco.com/elasticsearch/msearch',
+  ]]);
 
   const installedFetch = windowObject.fetch;
   interceptors.install();
   assert.equal(windowObject.fetch, installedFetch);
 });
-

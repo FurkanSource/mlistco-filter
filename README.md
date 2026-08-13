@@ -1,6 +1,6 @@
 # MListCo Vehicle Filter
 
-A Tampermonkey userscript that adds make/model search, year, price, mileage, and sold-status filtering to MListCo vehicle listings. It also restores listing position and filters after opening a vehicle, captures mileage from page data, and can optionally load inventory to a custom target count.
+A Tampermonkey userscript that adds make/model search, year, price, mileage, and sold-status filtering to MListCo vehicle listings. It also restores listing position and filters after opening a vehicle, maps mileage from MListCo's existing listing response without opening detail pages, and can optionally load inventory to a custom target count.
 
 ## Install
 
@@ -21,6 +21,11 @@ test/            Unit and browser-DOM integration tests
 ```
 
 The source is modular for development. `npm run build` bundles it into the single classic userscript Tampermonkey requires.
+
+Mileage records are associated with cards by stable listing identity. The primary key is the
+Bubble image asset ID shared by the listing response and rendered card; a unique normalized
+title, price, and seller location is used only as a fallback. Unknown or ambiguous records are
+excluded while a mileage limit is active and reported in the filter status.
 
 ## Development
 
