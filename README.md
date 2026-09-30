@@ -35,10 +35,6 @@ installation. It has no backend, API keys, external database, or telemetry.
 | --- | --- | --- | --- | --- |
 | Tampermonkey | JavaScript ES modules | esbuild | Node test runner + JSDOM | `@grant none` |
 
-## Project ownership
-
-This is an **AI-assisted build with AI-generated implementation**. Furkan Candar specified the filtering behavior, tested the live site, identified failures, and directed iterations. His work included specifying and validating make, model, year, price, mileage, and sold-status filters, persistent settings, and mileage matching across sorting and lazy loading.
-
 ## Features
 
 | Capability | Behavior |
